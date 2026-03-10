@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>INSANE Galaxy Battle</title>
+
+<style>
+body{
+margin:0;
+background:black;
+overflow:hidden;
+color:white;
+font-family:Arial;
+text-align:center;
+}
+
+canvas{display:block;}
+
+#menu,#gameover{
+position:absolute;
+top:35%;
+width:100%;
+}
+
+#ui{
+position:absolute;
+top:10px;
+left:10px;
+font-size:18px;
+display:none;
+}
+
+button{
+font-size:20px;
+padding:10px 20px;
+margin-top:20px;
+cursor:pointer;
+}
+</style>
+</head>
+
+<body>
+
+<div id="menu">
+<h1>🚀 INSANE Galaxy Battle</h1>
+<p>Move: Arrow Keys | Shoot: Space</p>
+<button onclick="startGame()">Start Game</button>
+</div>
+
+<div id="gameover" style="display:none">
+<h1>Game Over</h1>
+<p id="finalScore"></p>
+<button onclick="location.reload()">Restart</button>
+</div>
+
+<div id="ui">
+Score: <span id="score">0</span><br>
+Health: <span id="health">5</span><br>
+High Score: <span id="high"></span>
+</div>
+
+<canvas id="game"></canvas>
+
+<script>
+
+const canvas=document.getElementById("game");
+const ctx=canvas.getContext("2d");
+
+canvas.width=window.innerWidth;
+canvas.height=window.innerHeight;
+
+let running=false;
+let score=0;
+let health=5;
+let difficulty=1;
+
+let high=localStorage.getItem("insaneHigh")||0;
+document.getElementById("high").innerText=high;
+
+const player={
+x:canvas.width/2,
+y:canvas.height-100,
+size:40,
+speed:8,
+rapid:false,
+shield:false
+};
+
+let stars=[];
+let bullets=[];
+let enemies=[];
+let particles=[];
+let powerups=[];
+let boss=null;
+
+const keys={};
+
+document.addEventListener("keydown",e=>{
+keys[e.key]=true;
+if(e.key===" " && running) shoot();
+});
+
+document.addEventListener("keyup",e=>{
+keys[e.key]=false;
+});
+
+function startGame(){
+
+document.getElementById("menu").style.display="none";
+document.getElementById("ui").style.display="block";
+
+createStars();
+running=true;
+
+loop();
+}
+
+function createStars(){
+
+for(let i=0;i<300;i++){
+
+stars.push({
+x:Math.random()*canvas.width,
+y:Math.random()*canvas.height,
+speed:1+Math.random()*4
+});
+
+}
+
+}
+
+function shoot(){
+
+bullets.push({
+x:player.x,
+y:player.y,
+speed:player.rapid?20:12
+});
+
+}
+
+function spawnEnemies(){
+
+if(score>0 && score%50===0 && !boss){
+
+boss={
+x:canvas.width/2-150,
+y:60,
+w:300,
+h:100,
+hp:80,
+dir:1
+};
+
+return;
+}
+
+let type=Math.random();
+
+if(type<0.5){
+
+enemies.push({
+x:Math.random()*canvas.width,
+y:-40,
+size:35,
+speed:3+difficulty,
+ai:"normal"
+});
+
+}else{
+
+enemies.push({
+x:Math.random()*canvas.width,
+y:-40,
+size:35,
+speed:2+difficulty,
+ai:"chase"
+});
+
+}
+
+}
+
+setInterval(()=>{
+if(running) spawnEnemies();
+},1200);
+
+function explosion(x,y){
+
+for(let i=0;i<20;i++){
+
+particles.push({
+x:x,
+y:y,
+vx:(Math.random()-0.5)*6,
+vy:(Math.random()-0.5)*6,
+life:30
+});
+
+}
+
+}
+
+function spawnPower(x,y){
+
+let types=["rapid","shield","mega"];
+
+powerups.push({
+x:x,
+y:y,
+type:types[Math.floor(Math.random()*3)],
+size:20
+});
+
+}
+
+function update(){
+
+if(keys["ArrowLeft"]) player.x-=player.speed;
+if(keys["ArrowRight"]) player.x+=player.speed;
+
+stars.forEach(s=>{
+s.y+=s.speed;
+if(s.y>canvas.height) s.y=0;
+});
+
+bullets.forEach((b,i)=>{
+b.y-=b.speed;
+if(b.y<0) bullets.splice(i,1);
+});
+
+enemies.forEach((e,ei)=>{
+
+if(e.ai==="chase"){
+if(e.x<player.x) e.x+=2;
+if(e.x>player.x) e.x-=2;
+}
+
+e.y+=e.speed;
+
+if(e.y>canvas.height){
+enemies.splice(ei,1);
+health--;
+}
+
+bullets.forEach((b,bi)=>{
+
+if(
+b.x>e.x &&
+b.x<e.x+e.size &&
+b.y>e.y &&
+b.y<e.y+e.size
+){
+
+explosion(e.x,e.y);
+
+if(Math.random()<0.2) spawnPower(e.x,e.y);
+
+enemies.splice(ei,1);
+bullets.splice(bi,1);
+
+score++;
+
+}
+
+});
+
+});
+
+powerups.forEach((p,pi)=>{
+
+p.y+=3;
+
+if(
+p.x>player.x-20 &&
+p.x<player.x+20 &&
+p.y>player.y-20 &&
+p.y<player.y+20
+){
+
+if(p.type==="rapid") player.rapid=true;
+if(p.type==="shield") player.shield=true;
+
+setTimeout(()=>{
+player.rapid=false;
+player.shield=false;
+},6000);
+
+powerups.splice(pi,1);
+
+}
+
+});
+
+if(boss){
+
+boss.x+=boss.dir*3;
+
+if(boss.x<0 || boss.x+boss.w>canvas.width) boss.dir*=-1;
+
+bullets.forEach((b,bi)=>{
+
+if(
+b.x>boss.x &&
+b.x<boss.x+boss.w &&
+b.y>boss.y &&
+b.y<boss.y+boss.h
+){
+
+boss.hp--;
+bullets.splice(bi,1);
+
+if(boss.hp<=0){
+
+explosion(boss.x+150,boss.y);
+score+=200;
+boss=null;
+
+}
+
+}
+
+});
+
+}
+
+particles.forEach((p,i)=>{
+
+p.x+=p.vx;
+p.y+=p.vy;
+p.life--;
+
+if(p.life<=0) particles.splice(i,1);
+
+});
+
+difficulty+=0.0005;
+
+document.getElementById("score").innerText=score;
+document.getElementById("health").innerText=health;
+
+if(health<=0){
+
+running=false;
+
+if(score>high){
+localStorage.setItem("insaneHigh",score);
+}
+
+document.getElementById("gameover").style.display="block";
+document.getElementById("finalScore").innerText="Score: "+score;
+
+}
+
+}
+
+function draw(){
+
+ctx.fillStyle="black";
+ctx.fillRect(0,0,canvas.width,canvas.height);
+
+ctx.fillStyle="white";
+
+stars.forEach(s=>{
+ctx.fillRect(s.x,s.y,2,2);
+});
+
+ctx.fillStyle="cyan";
+
+ctx.beginPath();
+ctx.moveTo(player.x,player.y);
+ctx.lineTo(player.x-20,player.y+40);
+ctx.lineTo(player.x+20,player.y+40);
+ctx.fill();
+
+if(player.shield){
+ctx.strokeStyle="blue";
+ctx.beginPath();
+ctx.arc(player.x,player.y+20,35,0,Math.PI*2);
+ctx.stroke();
+}
+
+ctx.fillStyle="red";
+
+bullets.forEach(b=>{
+ctx.fillRect(b.x,b.y,4,12);
+});
+
+ctx.fillStyle="lime";
+
+enemies.forEach(e=>{
+ctx.fillRect(e.x,e.y,e.size,e.size);
+});
+
+powerups.forEach(p=>{
+ctx.fillStyle="yellow";
+ctx.fillRect(p.x,p.y,p.size,p.size);
+});
+
+if(boss){
+
+ctx.fillStyle="purple";
+ctx.fillRect(boss.x,boss.y,boss.w,boss.h);
+
+ctx.fillStyle="white";
+ctx.fillText("BOSS HP: "+boss.hp,boss.x,boss.y-10);
+
+}
+
+particles.forEach(p=>{
+ctx.fillRect(p.x,p.y,3,3);
+});
+
+}
+
+function loop(){
+
+if(!running) return;
+
+update();
+draw();
+
+requestAnimationFrame(loop);
+
+}
+
+</script>
+
+</body>
+</html>
